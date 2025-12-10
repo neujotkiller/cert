@@ -1,0 +1,40 @@
+name: cert_app
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # API 요청을 위한 HTTP 클라이언트
+  http: ^1.2.1
+
+  # 기존에 넣어둔 Dio는 삭제해도 되지만, 놔둬도 상관 없음(미사용)
+  # dio: ^5.0.0
+
+  # 로그인 토큰 저장
+  flutter_secure_storage: ^9.2.2
+
+  # 필요하면 유지
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/data/cert_basic.json
+    - assets/data/job_cert_map.json
+    - assets/data/major_cert_map.json
+    - assets/data/ncs_map.json
