@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../services/api.dart';
-import '../../models/user_profile.dart';
+import 'package:provider/provider.dart';
+import '../../providers/profile_provider.dart';
+import '../ncs/ncs_select_screen.dart';
 
 class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({super.key});
@@ -10,139 +11,74 @@ class ProfileEditScreen extends StatefulWidget {
 }
 
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
-  final ApiService _api = ApiService();
-
-  bool _loading = true;
-  UserProfile? _profile;
-
-  final _nameCtrl = TextEditingController();
-  final _ageCtrl = TextEditingController(); // YY 형식: 99, 00, 01
-  String? _selectedDepartment;
-  int? _selectedGrade;
-
-  final List<String> departments = [
-    "산업데이터공학과",
-    "컴퓨터공학과",
-    "경영학과",
-    "기계공학과",
-    "경제학과",
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProfile();
-  }
-
-  Future<void> _loadProfile() async {
-    try {
-      final data = await _api.get("/me/profile");
-
-      _profile = UserProfile.fromJson(data);
-
-      _nameCtrl.text = _profile?.name ?? "";
-      _selectedDepartment = _profile?.department;
-      _selectedGrade = _profile?.gradeYear;
-
-      if (_profile?.birthDate != null) {
-        _ageCtrl.text = _profile!.birthDate!.substring(0, 2);
-      }
-
-      setState(() => _loading = false);
-    } catch (e) {
-      print("프로필 불러오기 실패: $e");
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _saveProfile() async {
-    try {
-      await _api.patch(
-        "/me/profile",
-        {
-          "name": _nameCtrl.text,
-          "birth_date": _ageCtrl.text, // YY만 저장
-          "department": _selectedDepartment,
-          "grade_year": _selectedGrade,
-        },
-      );
-
-      if (mounted) {
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      print("프로필 저장 실패: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("저장 실패")),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+    final p = context.watch<ProfileProvider>().profile;
+
+    final nameCtrl = TextEditingController(text: p.name);
+    final majorCtrl = TextEditingController(text: p.major);
+    final gradeCtrl = TextEditingController(text: p.grade.toString());
+    final empTotalCtrl = TextEditingController(text: p.employmentTotal.toString());
+    final empMaleCtrl = TextEditingController(text: p.employmentMale.toString());
+    final empFemaleCtrl = TextEditingController(text: p.employmentFemale.toString());
 
     return Scaffold(
-      appBar: AppBar(title: const Text("프로필 수정")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
+      appBar: AppBar(title: const Text("프로필 편집")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _input("이름", _nameCtrl),
-            const SizedBox(height: 16),
-            _input("나이(예: 00, 01)", _ageCtrl, max: 2),
-            const SizedBox(height: 16),
+            // 이름
+            _field("이름", nameCtrl),
+            _field("학과", majorCtrl),
+            _field("학년", gradeCtrl),
 
-            const Text("학과", style: TextStyle(fontWeight: FontWeight.bold)),
-            DropdownButton<String>(
-              isExpanded: true,
-              value: _selectedDepartment,
-              items: departments
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedDepartment = v),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            const Text("취업률 입력", style: TextStyle(fontSize: 18)),
+            _field("전체 취업률", empTotalCtrl),
+            _field("남자 취업률", empMaleCtrl),
+            _field("여자 취업률", empFemaleCtrl),
 
-            const Text("학년"),
-            DropdownButton<int>(
-              isExpanded: true,
-              value: _selectedGrade,
-              items: [1, 2, 3, 4]
-                  .map((e) => DropdownMenuItem(value: e, child: Text("$e학년")))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedGrade = v),
-            ),
-            const SizedBox(height: 30),
-
+            const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: _saveProfile,
-              child: const Text("저장"),
-            )
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+              onPressed: () async {
+                context.read<ProfileProvider>().updateName(nameCtrl.text);
+                context.read<ProfileProvider>().updateMajor(majorCtrl.text);
+                context.read<ProfileProvider>().updateGrade(int.tryParse(gradeCtrl.text) ?? 0);
+                context.read<ProfileProvider>()
+                  .updateEmployment(
+                      double.tryParse(empTotalCtrl.text) ?? 0,
+                      double.tryParse(empMaleCtrl.text) ?? 0,
+                      double.tryParse(empFemaleCtrl.text) ?? 0
+                  );
+
+                Navigator.pop(context);
+              },
+              child: const Text("저장하기", style: TextStyle(color: Colors.white)),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _input(String label, TextEditingController c, {int max = 50}) {
+  Widget _field(String title, TextEditingController ctrl) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
+        Text(title),
+        const SizedBox(height: 6),
         TextField(
-          controller: c,
-          maxLength: max,
+          controller: ctrl,
           decoration: const InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
             border: OutlineInputBorder(),
-            counterText: "",
           ),
         ),
+        const SizedBox(height: 16),
       ],
     );
   }

@@ -1,187 +1,222 @@
 import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-class ApiService {
-  static final ApiService instance = ApiService._internal();
-  factory ApiService() => instance;
-  ApiService._internal();
+class Api {
+  Api._internal();
+  static final Api instance = Api._internal();
 
-  static const String baseUrl = "http://127.0.0.1:8000";
+  static const String baseUrl = "https://fastapi-cert-backend.onrender.com";
+  static const storage = FlutterSecureStorage();
 
-  final storage = const FlutterSecureStorage();
-
-  // ------------------------------------------------------
-  // JWT TOKEN
-  // ------------------------------------------------------
-  Future<void> saveToken(String token) async {
+  // =====================================================
+  // 토큰 저장
+  // =====================================================
+  static Future<void> saveToken(String token) async {
     await storage.write(key: "access_token", value: token);
   }
 
-  Future<String?> getToken() async {
+  // =====================================================
+  // 토큰 불러오기
+  // =====================================================
+  static Future<String?> getToken() async {
     return await storage.read(key: "access_token");
   }
 
-  Future<void> clearToken() async {
+  // =====================================================
+  // 토큰 삭제
+  // =====================================================
+  static Future<void> clearToken() async {
     await storage.delete(key: "access_token");
   }
 
-  // ------------------------------------------------------
-  // HEADERS
-  // ------------------------------------------------------
-  Future<Map<String, String>> _headers({bool auth = false}) async {
-    final h = {
-      "Content-Type": "application/json",
-    };
-    if (auth) {
-      final token = await getToken();
-      if (token != null) {
-        h["Authorization"] = "Bearer $token";
-      }
-    }
-    return h;
-  }
-
-  // ------------------------------------------------------
-  // LOGIN
-  // ------------------------------------------------------
-  Future<bool> login(String email, String password) async {
+  // =====================================================
+  // 로그인
+  // =====================================================
+  Future<Map<String, dynamic>> login(String userid, String password) async {
     final url = Uri.parse("$baseUrl/auth/login");
-
     final res = await http.post(
       url,
-      headers: await _headers(),
-      body: jsonEncode({
-        "email": email,
-        "password": password,
-      }),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"userid": userid, "password": password}),
     );
 
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      await saveToken(data["access_token"]);
-      return true;
-    }
-    return false;
+    return jsonDecode(res.body);
   }
 
-  // ------------------------------------------------------
-  // SIGNUP
-  // ------------------------------------------------------
-  Future<bool> signup(String email, String password, String name) async {
+  // =====================================================
+  // 회원가입
+  // =====================================================
+  Future<AuthResult> signup({
+    required String name,
+    required String birth,
+    required String email,
+    required String userid,
+    required String password,
+  }) async {
     final url = Uri.parse("$baseUrl/auth/signup");
 
     final res = await http.post(
       url,
-      headers: await _headers(),
+      headers: {"Content-Type": "application/json"},
       body: jsonEncode({
-        "email": email,
-        "password": password,
         "name": name,
+        "birth": birth,
+        "email": email,
+        "userid": userid,
+        "password": password,
       }),
     );
 
-    return res.statusCode == 201;
+    final data = jsonDecode(res.body);
+
+    return AuthResult(
+      success: res.statusCode == 201,
+      message: data["message"],
+    );
   }
 
-  // ------------------------------------------------------
-  // GET PROFILE
-  // ------------------------------------------------------
-  Future<Map<String, dynamic>?> getProfile() async {
-    final url = Uri.parse("$baseUrl/me/profile");
-
-    final res = await http.get(
+  // =====================================================
+  // 이메일 중복 체크
+  // =====================================================
+  Future<bool> checkEmail(String email) async {
+    final url = Uri.parse("$baseUrl/auth/check-email");
+    final res = await http.post(
       url,
-      headers: await _headers(auth: true),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email}),
     );
+
+    final body = jsonDecode(res.body);
+    return res.statusCode == 200 && body["ok"] == true;
+  }
+
+  // =====================================================
+  // 이메일 인증 여부
+  // =====================================================
+  Future<bool> checkEmailVerify(String email) async {
+    final url = Uri.parse("$baseUrl/auth/email-verify-status?email=$email");
+    final res = await http.get(url);
 
     if (res.statusCode == 200) {
-      return jsonDecode(res.body);
+      final body = jsonDecode(res.body);
+      return body["verified"] == true;
     }
-    return null;
+    return false;
   }
 
-  // ------------------------------------------------------
-  // UPDATE PROFILE
-  // ------------------------------------------------------
-  Future<bool> updateProfile(Map<String, dynamic> payload) async {
-    final url = Uri.parse("$baseUrl/me/profile");
-
-    final res = await http.patch(
+  // =====================================================
+  // ID 중복 체크
+  // =====================================================
+  Future<bool> checkUserId(String userid) async {
+    final url = Uri.parse("$baseUrl/auth/check-userid");
+    final res = await http.post(
       url,
-      headers: await _headers(auth: true),
-      body: jsonEncode(payload),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"userid": userid}),
     );
 
-    return res.statusCode == 200;
+    final body = jsonDecode(res.body);
+    return res.statusCode == 200 && body["ok"] == true;
   }
 
-  // ------------------------------------------------------
-  // RECOMMENDED CERTIFICATES (전공 기반)
-  // ------------------------------------------------------
-  Future<List<dynamic>> getRecommendedCerts() async {
+  // =====================================================
+  // 내 자격증 추천
+  // =====================================================
+  Future<List<dynamic>> getMyRecommendedCertificates(String token) async {
     final url = Uri.parse("$baseUrl/me/certificates/recommended");
 
     final res = await http.get(
       url,
-      headers: await _headers(auth: true),
+      headers: {"Authorization": "Bearer $token"},
     );
 
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body);
-    }
-    return [];
+    final body = jsonDecode(res.body);
+    return body["data"] ?? [];
   }
 
-  // ------------------------------------------------------
-  // NCS 기반 추천
-  // ------------------------------------------------------
-  Future<List<dynamic>> getCertsByNcs() async {
-    final url = Uri.parse("$baseUrl/me/certificates/by-ncs");
+  // =====================================================
+  // NCS 기반 자격증 추천
+  // =====================================================
+  Future<List<dynamic>> getCertificatesByNcs(String token) async {
+    final url = Uri.parse("$baseUrl/me/certificates/ncs");
 
     final res = await http.get(
       url,
-      headers: await _headers(auth: true),
+      headers: {"Authorization": "Bearer $token"},
     );
 
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body);
-    }
-    return [];
+    final body = jsonDecode(res.body);
+    return body["data"] ?? [];
   }
 
-  // ------------------------------------------------------
-  // COMMUNITY — 목록
-  // ------------------------------------------------------
-  Future<List<dynamic>> getPosts() async {
-    final url = Uri.parse("$baseUrl/community/posts");
-
-    final res = await http.get(
-      url,
-      headers: await _headers(auth: true),
-    );
-
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body);
-    }
-    return [];
-  }
-
-  // ------------------------------------------------------
-  // COMMUNITY — 글쓰기
-  // ------------------------------------------------------
-  Future<bool> writePost(String title, String content) async {
+  // =====================================================
+  // 커뮤니티 글 작성
+  // =====================================================
+  Future<bool> createCommunityPost(
+    String token,
+    String title,
+    String content,
+  ) async {
     final url = Uri.parse("$baseUrl/community/posts");
 
     final res = await http.post(
       url,
-      headers: await _headers(auth: true),
-      body: jsonEncode({
-        "title": title,
-        "content": content,
-      }),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: jsonEncode({"title": title, "content": content}),
     );
 
     return res.statusCode == 201;
   }
+
+  // =====================================================
+  // 커뮤니티 글 목록
+  // =====================================================
+  Future<List<dynamic>> getCommunityPosts() async {
+    final url = Uri.parse("$baseUrl/community/posts");
+    final res = await http.get(url);
+    final body = jsonDecode(res.body);
+
+    return body is List ? body : (body["data"] ?? []);
+  }
+
+  // =====================================================
+  // 직업 상세
+  // =====================================================
+  Future<Map<String, dynamic>> getJobDetail(int jobSeq) async {
+    final url = Uri.parse("$baseUrl/jobs/detail/$jobSeq");
+
+    final res = await http.get(url);
+
+    if (res.statusCode == 200) return jsonDecode(res.body);
+    return {};
+  }
+
+  // =====================================================
+  // 자격증 → 관련 직업
+  // =====================================================
+  Future<List<dynamic>> getRelatedJobs(int licenseId) async {
+    final url = Uri.parse("$baseUrl/cert/related_jobs/$licenseId");
+
+    final res = await http.get(url);
+
+    if (res.statusCode == 200) {
+      final body = jsonDecode(res.body);
+      return body["jobs"] ?? [];
+    }
+    return [];
+  }
+}
+
+class AuthResult {
+  final bool success;
+  final String? message;
+
+  AuthResult({
+    required this.success,
+    this.message,
+  });
 }

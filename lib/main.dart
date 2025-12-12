@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'providers/auth_provider.dart';
+import 'providers/profile_provider.dart';
+
 import 'screens/splash/splash_screen.dart';
 import 'screens/login/login_screen.dart';
 import 'screens/signup/signup_screen.dart';
 import 'screens/home/cert_home_screen.dart';
 
-// 🔥 추가: APIService 초기화용 import
-import 'services/api.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // 🔥 1) 앱 실행 전에 APIService 초기화 (토큰 읽어오기)
-  await ApiService.instance.init();  
-
-  runApp(const MyApp());
+void main() {
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -23,24 +28,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: "사용자 맞춤형 자격증 플랫폼",
 
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF5B46C5),
-        ),
-        fontFamily: "Pretendard",
-      ),
-
-      // 앱 시작 화면
+      // ✅ 앱 최초 진입 화면
       home: const SplashScreen(),
 
-      // 라우트 등록
+      // ✅ Named Route 등록 (🔥 이게 핵심)
       routes: {
-        "/login": (_) => const LoginScreen(),
-        "/signup": (_) => const SignupScreen(),
-        "/home": (_) => const CertHomeScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/signup': (context) => const SignupScreen(),
+        '/home': (context) => const CertHomeScreen(),
       },
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:your_app/api.dart'; // ← 반드시 실제 프로젝트 경로로 수정
-import '../login/login_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:cert_app/providers/auth_provider.dart';
+import 'package:cert_app/services/api.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -10,149 +11,233 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController pwController = TextEditingController();
-  final TextEditingController nameController = TextEditingController();
+  final _name = TextEditingController();
+  final _birth = TextEditingController();
+  final _email = TextEditingController();
+  final _userid = TextEditingController();
+  final _password = TextEditingController();
+  final _passwordConfirm = TextEditingController();
 
-  bool isLoading = false;
+  bool loading = false;
+  bool checkingId = false;
+  bool checkingEmail = false;
 
-  Future<void> _signup() async {
-    final email = emailController.text.trim();
-    final password = pwController.text.trim();
-    final name = nameController.text.trim();
+  bool idAvailable = false;
+  bool emailVerified = false;
 
-    if (email.isEmpty || password.isEmpty) {
-      _showError("이메일과 비밀번호는 필수입니다.");
+  // ==============================
+  // 아이디 중복확인
+  // ==============================
+  Future<void> _checkUserId() async {
+    if (_userid.text.trim().isEmpty) {
+      _showSnack("아이디를 입력하세요.");
       return;
     }
 
-    setState(() => isLoading = true);
+    setState(() => checkingId = true);
 
-    final result = await ApiService.signup(email, password, name);
+    final ok = await Api.instance.checkUserId(_userid.text.trim());
 
-    setState(() => isLoading = false);
-
-    if (result == null) {
-      _showError("회원가입 실패. 이메일 형식 또는 비밀번호를 확인하세요.");
-      return;
-    }
-
-    // 가입 성공 → 로그인 화면으로 이동
     if (!mounted) return;
 
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("회원가입 완료"),
-        content: const Text("이제 로그인해 주세요."),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // dialog 닫기
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
-            },
-            child: const Text("확인"),
-          )
-        ],
-      ),
+    setState(() {
+      checkingId = false;
+      idAvailable = ok;
+    });
+
+    _showSnack(ok ? "사용 가능한 아이디입니다." : "이미 존재하는 아이디입니다.");
+  }
+
+  // ==============================
+  // 이메일 인증 요청
+  // ==============================
+  Future<void> _requestEmailVerify() async {
+    if (_email.text.trim().isEmpty) {
+      _showSnack("이메일을 입력하세요.");
+      return;
+    }
+
+    setState(() => checkingEmail = true);
+
+    final ok = await Api.instance.checkEmail(_email.text.trim());
+
+    if (!mounted) return;
+
+    setState(() => checkingEmail = false);
+
+    _showSnack(
+      ok ? "인증 메일이 전송되었습니다. 메일함을 확인해주세요."
+         : "이미 사용 중인 이메일입니다.",
     );
   }
 
-  void _showError(String msg) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("오류"),
-        content: Text(msg),
-        actions: [
-          TextButton(
-            child: const Text("확인"),
-            onPressed: () => Navigator.pop(context),
-          )
-        ],
-      ),
+  // ==============================
+  // 이메일 인증 확인
+  // ==============================
+  Future<void> _verifyEmail() async {
+    final verified = await Api.instance.checkEmailVerify(_email.text.trim());
+
+    if (!mounted) return;
+
+    setState(() => emailVerified = verified);
+
+    _showSnack(
+      verified ? "이메일 인증이 완료되었습니다!" : "아직 인증되지 않았습니다.",
+    );
+  }
+
+  // ==============================
+  // 회원가입
+  // ==============================
+  Future<void> _submitSignup() async {
+    if (!idAvailable) {
+      _showSnack("아이디 중복확인을 해주세요.");
+      return;
+    }
+    if (!emailVerified) {
+      _showSnack("이메일 인증을 완료해주세요.");
+      return;
+    }
+    if (_password.text != _passwordConfirm.text) {
+      _showSnack("비밀번호가 일치하지 않습니다.");
+      return;
+    }
+
+    setState(() => loading = true);
+
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.signup(
+      name: _name.text.trim(),
+      birth: _birth.text.trim(),
+      email: _email.text.trim(),
+      userid: _userid.text.trim(),
+      password: _password.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    setState(() => loading = false);
+
+    if (ok) {
+      _showSnack("회원가입 성공!");
+      Navigator.pop(context);
+    } else {
+      _showSnack("회원가입 실패");
+    }
+  }
+
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
     );
   }
 
   @override
+  void dispose() {
+    _name.dispose();
+    _birth.dispose();
+    _email.dispose();
+    _userid.dispose();
+    _password.dispose();
+    _passwordConfirm.dispose();
+    super.dispose();
+  }
+
+  // ============================================================
+  // UI
+  // ============================================================
+  @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F3FF),
       appBar: AppBar(
-        title: const Text("회원가입"),
-        centerTitle: true,
+        backgroundColor: Colors.white,
+        title: const Text("회원가입", style: TextStyle(color: Colors.black)),
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            // 이름 입력
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: "이름 (선택)",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              _inputField("이름", _name),
+              _inputField("생년월일 (예: 000229)", _birth),
 
-            // 이메일 입력
-            TextField(
-              controller: emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: "이메일",
-                border: OutlineInputBorder(),
+              Row(
+                children: [
+                  Expanded(child: _inputField("이메일", _email)),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: checkingEmail ? null : _requestEmailVerify,
+                    child: checkingEmail
+                        ? const CircularProgressIndicator(strokeWidth: 2)
+                        : const Text("인증 전송"),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
 
-            // 비밀번호 입력
-            TextField(
-              controller: pwController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: "비밀번호",
-                border: OutlineInputBorder(),
+              const SizedBox(height: 6),
+              OutlinedButton(
+                onPressed: _verifyEmail,
+                child: const Text("인증 확인"),
               ),
-            ),
-            const SizedBox(height: 24),
 
-            // 회원가입 버튼
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  Expanded(child: _inputField("아이디", _userid)),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: checkingId ? null : _checkUserId,
+                    child: checkingId
+                        ? const CircularProgressIndicator(strokeWidth: 2)
+                        : const Text("중복확인"),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              _inputField("비밀번호", _password, obscure: true),
+              _inputField("비밀번호 확인", _passwordConfirm, obscure: true),
+
+              const SizedBox(height: 24),
+
+              ElevatedButton(
+                onPressed: loading ? null : _submitSignup,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: cs.primary,
+                  minimumSize: const Size(double.infinity, 48),
                 ),
-                onPressed: isLoading ? null : _signup,
-                child: isLoading
+                child: loading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                        "회원가입",
-                        style: TextStyle(fontSize: 18),
-                      ),
+                    : const Text("회원가입 완료"),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-            const SizedBox(height: 12),
-
-            // 로그인 이동
-            TextButton(
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              },
-              child: const Text("이미 계정이 있으신가요? 로그인하기"),
-            ),
-          ],
+  Widget _inputField(String label, TextEditingController controller,
+      {bool obscure = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextField(
+        controller: controller,
+        obscureText: obscure,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
     );
