@@ -1,100 +1,113 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../providers/profile_provider.dart';
-import '../../models/user_profile.dart';
+import 'package:cert_app/providers/profile_provider.dart';
+import 'package:cert_app/screens/profile/profile_edit_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
+  Future<void> _pickImage(BuildContext context) async {
+    final picker = ImagePicker();
+    final XFile? file = await picker.pickImage(source: ImageSource.gallery);
+
+    if (file != null && context.mounted) {
+      context.read<ProfileProvider>().updateImage(file.path);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ProfileProvider>();
-    final UserProfile? p = provider.profile;
 
-    if (p == null) {
-      return const Scaffold(
-        body: Center(child: Text("프로필 정보가 없습니다.")),
+    // 프로필 없을 때 UI
+    if (!provider.hasProfile || provider.profile == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text("내 프로필"),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: Center(
+          child: ElevatedButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileEditScreen()),
+              );
+            },
+            child: const Text("프로필 작성"),
+          ),
+        ),
       );
     }
 
+    final p = provider.profile!;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("내 프로필")),
+      appBar: AppBar(
+        title: const Text("내 프로필"),
+        // ProfileScreen을 push로 열면 자동 뒤로가기가 뜨지만,
+        // pushReplacement로 열었을 가능성이 높아서 안전하게 직접 넣어둠
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            // ============================
-            // 프로필 이미지 (Web-safe)
-            // ============================
-            CircleAvatar(
-              radius: 55,
-              child: const Icon(Icons.person, size: 55),
+            GestureDetector(
+              onTap: () => _pickImage(context),
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  CircleAvatar(
+                    radius: 55,
+                    backgroundImage: (p.imageUrl != null && p.imageUrl!.isNotEmpty)
+                        ? FileImage(File(p.imageUrl!))
+                        : null,
+                    child: (p.imageUrl == null || p.imageUrl!.isEmpty)
+                        ? const Icon(Icons.person, size: 48)
+                        : null,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(100),
+                      boxShadow: const [BoxShadow(blurRadius: 6, color: Colors.black12)],
+                    ),
+                    child: const Icon(Icons.camera_alt, size: 18),
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(height: 12),
+            Text(p.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text("${p.major} / ${p.grade}학년"),
 
             const SizedBox(height: 20),
 
-            // ============================
-            // 기본 정보
-            // ============================
-            Text(
-              p.name,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            Text("${p.major} / ${p.grade}학년"),
-
-            const SizedBox(height: 30),
-
-            // ============================
-            // 취업률 카드
-            // ============================
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    const Text("취업률", style: TextStyle(fontSize: 18)),
-                    const SizedBox(height: 12),
-                    Text("전체: ${p.employmentTotal}%"),
-                    Text("남자: ${p.employmentMale}%"),
-                    Text("여자: ${p.employmentFemale}%"),
-                  ],
-                ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProfileEditScreen()),
+                  );
+                },
+                child: const Text("프로필 수정"),
               ),
             ),
-
-            const SizedBox(height: 30),
-
-            // ============================
-            // 관심 NCS
-            // ============================
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "관심 NCS 대직무",
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            Wrap(
-              spacing: 10,
-              children: p.interestNcs
-                  .map((e) => Chip(label: Text(e)))
-                  .toList(),
-            ),
-
-            const SizedBox(height: 30),
-
-            // ============================
-            // 커뮤니티 버튼
-            // ============================
-            ElevatedButton(onPressed: () {}, child: const Text("내가 쓴 글")),
-            ElevatedButton(onPressed: () {}, child: const Text("좋아요 한 글")),
-            ElevatedButton(onPressed: () {}, child: const Text("북마크한 글")),
           ],
         ),
       ),

@@ -1,43 +1,29 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-import 'api.dart';
-import '../models/user_profile.dart';
+import 'package:cert_app/services/api.dart';
+import 'package:cert_app/models/user_profile.dart';
 
 class ProfileAPI {
   static Future<UserProfile?> getProfile() async {
-    final token = await Api.getToken();
-    if (token == null) return null;
+    try {
+      final token = await Api.getToken();
+      if (token == null) return null;
 
-    final res = await http.get(
-      Uri.parse('${Api.baseUrl}/profile'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+      final res = await http.get(
+        Uri.parse('${Api.baseUrl}/profile'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      return UserProfile.fromJson(data);
+      if (res.statusCode == 200) {
+        return UserProfile.fromJson(jsonDecode(res.body));
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
-
-    return null;
-  }
-
-  static Future<bool> updateProfile(UserProfile profile) async {
-    final token = await Api.getToken();
-    if (token == null) return false;
-
-    final res = await http.put(
-      Uri.parse('${Api.baseUrl}/profile'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(profile.toJson()),
-    );
-
-    return res.statusCode == 200;
   }
 }

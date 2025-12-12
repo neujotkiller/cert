@@ -1,19 +1,25 @@
 class Certificate {
-  final int id;
   final String name;
-  final String description;
+  final String category;
+  final int difficulty;       // 1~5
+  final double passRate;      // %
+  final int applicants;       // 명
 
   Certificate({
-    required this.id,
     required this.name,
-    required this.description,
+    required this.category,
+    required this.difficulty,
+    required this.passRate,
+    required this.applicants,
   });
 
   factory Certificate.fromJson(Map<String, dynamic> json) {
     return Certificate(
-      id: json['id'],
-      name: json['name'] ?? '',
-      description: json['description'] ?? '',
+      name: json['name'],
+      category: json['category'],
+      difficulty: json['difficulty'],
+      passRate: (json['pass_rate'] as num).toDouble(),
+      applicants: json['applicants'],
     );
   }
 }

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-import 'api.dart';
+import '../services/api.dart';
 
 class CommunityAPI {
   static Future<List<dynamic>> getMyPosts(String token) async {
